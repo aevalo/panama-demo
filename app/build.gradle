@@ -1,5 +1,7 @@
 plugins {
   id 'application'
+  id 'c'
+  id 'io.github.krakowski.jextract' version '0.4.1'
 }
 
 repositories {
@@ -11,10 +13,50 @@ dependencies {
   testImplementation 'org.junit.jupiter:junit-jupiter:5.8.1'
 }
 
+model {
+  components {
+    nativeLib(NativeLibrarySpec) {
+      sources {
+        c {
+          source {
+            srcDir 'src/main/c' // Path to your C source files
+          }
+        }
+      }
+    }
+  }
+}
+
+// Tells gradle to wait for our native library to compile before we can run or test our java application
+run.dependsOn 'nativeLibSharedLibrary'
+test.dependsOn 'nativeLibSharedLibrary'
+
+java {
+  toolchain {
+    languageVersion.set(JavaLanguageVersion.of(21))
+  }
+}
+
 application {
   mainClass = 'panama.demo.App'
+  applicationDefaultJvmArgs = ['-Djava.library.path=' + file("${buildDir}/libs/nativeLib/shared").absolutePath, '--enable-preview']
+}
+
+jextract {
+  // The header file from which we want to generate the bindings
+  header("${project.projectDir}/src/main/c/native.h") {
+    // The library name (don't worry about this for now)
+    libraries = ['nativeLib']
+    // The package under which all source files will be generated
+    targetPackage = 'org.nativelib'
+    // The generated class name
+    className = 'NativeLib'
+  }
 }
 
 tasks.named('test') {
+  // https://docs.gradle.org/current/userguide/java_testing.html#sec:test_logging
   useJUnitPlatform()
+  jvmArgs += '-Djava.library.path=' + file("${buildDir}/libs/nativeLib/shared").absolutePath
+  jvmArgs += '--enable-preview'
 }
